@@ -69,7 +69,7 @@ def generate_filling_infeed_chart(data: pd.DataFrame) -> str:
         ax.set_title('Filling Infeed by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Benches')
-        ax.set_xticklabels(ax.get_xticklabels())
+
         
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         
@@ -157,7 +157,6 @@ def generate_harvested_benches_chart(data):
         ax.set_title('Harvested benches by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Benches')
-        ax.set_xticklabels(ax.get_xticklabels())
         
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         
@@ -201,7 +200,6 @@ def generate_harvested_weight_chart(data):
         ax.set_title('Harvested kilograms by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Total Kilograms')
-        ax.set_xticklabels(ax.get_xticklabels())
 
         for p in barplot.patches:
             height = p.get_height()
@@ -248,7 +246,6 @@ def generate_average_yield_chart(data):
         ax.set_title('Average Yield by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Average KG/Bench')
-        ax.set_xticklabels(ax.get_xticklabels())
         
         for p in barplot.patches:
             height = p.get_height()
