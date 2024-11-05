@@ -13,9 +13,9 @@ engine = create_engine(DATABASE_URL)
 os.makedirs('data_exports', exist_ok=True)
 
 # File paths voor CSV-backups in de `data_exports` map
-csv_filling_infeed = 'data_exports/df_filling_infeed.csv'
-csv_transplanting_infeed = 'data_exports/df_transplanting_infeed.csv'
-csv_bench_weight = 'data_exports/df_bench_weight.csv'
+csv_filling_infeed = 'Process/data_exports/df_filling_infeed.csv'
+csv_transplanting_infeed = 'Process/data_exports/df_transplanting_infeed.csv'
+csv_bench_weight = 'Process/data_exports/df_bench_weight.csv'
 
 # Queries om de data op te halen
 query_filling_infeed = "SELECT * FROM `event` WHERE `type` = 'FILLING_INFEED'"

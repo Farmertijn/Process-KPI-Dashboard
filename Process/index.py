@@ -1,14 +1,5 @@
 import subprocess
 import sys
-from datetime import timedelta, datetime
-import pandas as pd
-from dash import dcc, html, Input, Output, State, callback_context
-from app import app, server
-import home
-import InOut
-import harvester
-import calculate
-from data import df_filling_infeed, df_bench_weight, df_transplanting_infeed, using_csv_backup, reference_date  # Importeer referentiedatum
 
 # Lijst met benodigde libraries
 required_libraries = [
@@ -30,6 +21,15 @@ for library in required_libraries:
         print(f"{library} wordt geïnstalleerd...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", library])
 
+from datetime import timedelta, datetime
+import pandas as pd
+from dash import dcc, html, Input, Output, State, callback_context
+from app import app, server
+import home
+import InOut
+import harvester
+from data import df_filling_infeed, df_bench_weight, df_transplanting_infeed, using_csv_backup, reference_date
+
 # Layout met centrale knoppen en exportknop
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
@@ -43,6 +43,7 @@ app.layout = html.Div([
     ]),
     html.Div(id='page-content')
 ])
+app.title = 'Process KPI Dashboard'
 
 # Callback voor navigatie naar de juiste pagina (InOut, Harvester of Home)
 @app.callback(
