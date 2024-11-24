@@ -7,185 +7,194 @@ import pandas as pd
 import pytz
 import re
 
-plt.switch_backend('Agg')
+plt.switch_backend('Agg')  # Gebruik een backend zonder GUI om grafieken te genereren.
+
 
 def extract_text_in_parentheses(text):
+    # Haal tekst tussen haakjes uit een string, of retourneer de originele tekst.
     match = re.search(r'\((.*?)\)', text)
     return match.group(1) if match else text
 
+
 def generate_transplanting_infeed_chart(data, period):
+    # Genereer een grafiek voor transplantatie-invoer over tijd.
     if not data.empty:
         fig, ax = plt.subplots()
-        
+
         ax.fill_between(
             data['time_group'],
             data['counts'],
             step='mid',
             color='#00637A'
         )
-        
-        
         ax.step(data['time_group'], data['counts'], where='mid', color='#00637A', linewidth=2.5)
-        
+
         ax.set_title('Transplanted Benches versus Time')
         ax.set_xlabel('Time' if period != 'week' else 'Date')
         ax.set_ylabel('Benches')
-        
+
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
-        
+
         if period == 'week':
-            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m-%d'))    
+            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m-%d'))
         if period in ['today', 'yesterday']:
-            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%H', tz=pytz.timezone('America/Toronto')))   
-        
-        
+            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%H', tz=pytz.timezone('America/Toronto')))
+
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        
         ax.set_ylim(bottom=0)
         ax.set_xlim(data['time_group'].min(), data['time_group'].max())
-        
+
         buffer = BytesIO()
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         encoded_image = base64.b64encode(buffer.getvalue()).decode()
-        
+
         plt.close(fig)
         return encoded_image
     return ""
 
+
 def generate_filling_infeed_chart(data: pd.DataFrame) -> str:
+    # Genereer een staafdiagram van invoer per gewas.
     if not data.empty:
         fig, ax = plt.subplots()
         crop_counts = data['crop name'].value_counts().reset_index()
         crop_counts.columns = ['crop name', 'counts']
         crop_counts['short name'] = crop_counts['crop name'].apply(extract_text_in_parentheses)
-        
+
         barplot = sns.barplot(data=crop_counts, x='short name', y='counts', ax=ax)
         bar_color = '#00637A'
         for bar in barplot.patches:
             bar.set_facecolor(bar_color)
-        
+
         ax.set_title('Filling Infeed by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Benches')
-
-        
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        
+
         for p in barplot.patches:
             height = p.get_height()
             barplot.text(
-                p.get_x() + p.get_width() / 2., 
-                height / 2, 
-                int(height), 
-                ha="center", 
-                va="center", 
-                color="white", 
-                fontsize=12, 
+                p.get_x() + p.get_width() / 2.,
+                height / 2,
+                int(height),
+                ha="center",
+                va="center",
+                color="white",
+                fontsize=12,
                 weight="bold"
             )
 
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
-        
+
         buffer = BytesIO()
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         encoded_bar_image = base64.b64encode(buffer.getvalue()).decode()
-        
+
         plt.close(fig)
         return encoded_bar_image
     return ""
 
+
 def generate_outfeed_chart(outfeed_data: pd.DataFrame, period: str, bench_weight_data, unique_transplant_jobs_data):
+    # Genereer een cumulatieve grafiek voor uitgifte van benches.
     if not outfeed_data.empty:
         fig, ax = plt.subplots()
-        
+
         combined_data = pd.DataFrame({
             'time_group': outfeed_data['time_group'],
             'bench_weight_counts': bench_weight_data['counts'] if not bench_weight_data.empty else 0,
-            'unique_transplant_jobs_counts': unique_transplant_jobs_data['counts'] if not unique_transplant_jobs_data.empty else 0
+            'unique_transplant_jobs_counts': unique_transplant_jobs_data[
+                'counts'] if not unique_transplant_jobs_data.empty else 0
         }).fillna(0)
-        
+
         combined_data['cumulative_bench_weight'] = combined_data['bench_weight_counts'].cumsum()
         combined_data['cumulative_unique_transplant_jobs'] = combined_data['unique_transplant_jobs_counts'].cumsum()
-        
-        ax.fill_between(combined_data['time_group'], 0, combined_data['cumulative_bench_weight'], color='#00637A', alpha=1.0, label='To Harvester')
-        ax.fill_between(combined_data['time_group'], combined_data['cumulative_bench_weight'], combined_data['cumulative_bench_weight'] + combined_data['cumulative_unique_transplant_jobs'], color='#137C91', alpha=1.0, label='To Transplanting')
-        
+
+        ax.fill_between(combined_data['time_group'], 0, combined_data['cumulative_bench_weight'], color='#00637A',
+                        alpha=1.0, label='To Harvester')
+        ax.fill_between(combined_data['time_group'], combined_data['cumulative_bench_weight'],
+                        combined_data['cumulative_bench_weight'] + combined_data['cumulative_unique_transplant_jobs'],
+                        color='#137C91', alpha=1.0, label='To Transplanting')
+
         ax.set_title('Outfeed Events versus Time')
         ax.set_xlabel('Time' if period != 'week' else 'Date')
         ax.set_ylabel('Benches')
-        
+
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
-        
+
         if period == 'week':
             ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m-%d'))
-        
         if period in ['today', 'yesterday']:
-            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%H', tz=pytz.timezone('America/Toronto'))) 
-        
+            ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%H', tz=pytz.timezone('America/Toronto')))
+
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend(loc='upper left')
-        
+
         ax.set_ylim(bottom=0)
         ax.set_xlim(outfeed_data['time_group'].min(), outfeed_data['time_group'].max())
-        
+
         buffer = BytesIO()
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         encoded_outfeed_image = base64.b64encode(buffer.getvalue()).decode()
-        
+
         plt.close(fig)
         return encoded_outfeed_image
     return ""
 
+
 def generate_harvested_benches_chart(data):
+    # Genereer een staafdiagram voor geoogste benches per gewas.
     if not data.empty:
         fig, ax = plt.subplots()
         crop_counts = data['crop name'].value_counts().reset_index()
         crop_counts.columns = ['crop name', 'counts']
         crop_counts['short name'] = crop_counts['crop name'].apply(extract_text_in_parentheses)
-        
+
         barplot = sns.barplot(data=crop_counts, x='short name', y='counts', ax=ax)
         bar_color = '#00637A'
         for bar in barplot.patches:
             bar.set_facecolor(bar_color)
-        
+
         ax.set_title('Harvested benches by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Benches')
-        
+
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-        
+
         for p in barplot.patches:
             height = p.get_height()
             barplot.text(
-                p.get_x() + p.get_width() / 2., 
-                height / 2, 
-                int(height), 
-                ha="center", 
-                va="center", 
-                color="white", 
-                fontsize=12, 
+                p.get_x() + p.get_width() / 2.,
+                height / 2,
+                int(height),
+                ha="center",
+                va="center",
+                color="white",
+                fontsize=12,
                 weight="bold"
             )
 
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
-        
+
         buffer = BytesIO()
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         encoded_harvested_benches_image = base64.b64encode(buffer.getvalue()).decode()
-        
+
         plt.close(fig)
         return encoded_harvested_benches_image
     return ""
 
+
 def generate_harvested_weight_chart(data):
+    # Genereer een staafdiagram voor geoogst gewicht per gewas.
     if not data.empty:
         fig, ax = plt.subplots()
         crop_weights = data.groupby('crop name')['weight in kilograms'].sum().reset_index()
@@ -196,7 +205,7 @@ def generate_harvested_weight_chart(data):
         bar_color = '#00637A'
         for bar in barplot.patches:
             bar.set_facecolor(bar_color)
-        
+
         ax.set_title('Harvested kilograms by Crop Name')
         ax.set_xlabel('')
         ax.set_ylabel('Total Kilograms')
@@ -204,13 +213,13 @@ def generate_harvested_weight_chart(data):
         for p in barplot.patches:
             height = p.get_height()
             barplot.text(
-                p.get_x() + p.get_width() / 2., 
-                height / 2, 
-                f'{height:.1f}', 
-                ha="center", 
-                va="center", 
-                color="white", 
-                fontsize=12, 
+                p.get_x() + p.get_width() / 2.,
+                height / 2,
+                f'{height:.1f}',
+                ha="center",
+                va="center",
+                color="white",
+                fontsize=12,
                 weight="bold"
             )
 

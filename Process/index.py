@@ -30,18 +30,17 @@ import home
 import InOut
 import harvester
 
-# Flask server configureren
+# Configuratie van de Flask-server
 server = Flask(__name__)
-server.secret_key = 'your_secret_key'
-server.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+server.secret_key = 'your_secret_key'  # Sleutel voor sessiebeheer
+server.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'  # SQLite-database
 server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(server)
 bcrypt.init_app(server)
 
-# Maak database als die nog niet bestaat
+# Initialiseer database en voeg een standaard admin-gebruiker toe
 with server.app_context():
     db.create_all()
-    # Voeg een standaard admin-gebruiker toe als deze nog niet bestaat
     if not User.query.filter_by(username='admin').first():
         hashed_password = bcrypt.generate_password_hash('admin123').decode('utf-8')
         admin_user = User(username='admin', password=hashed_password, is_admin=True)
@@ -49,16 +48,16 @@ with server.app_context():
         db.session.commit()
         print("Admin user created: admin/admin123")
 
-# Dash-app configureren
+# Configuratie van de Dash-applicatie
 app = Dash(server=server, url_base_pathname='/dashboard/', suppress_callback_exceptions=True)
 app.title = 'Process KPI Dashboard'
 
-# Rootroute voor redirect naar login
+# Redirect rootroute naar de loginpagina
 @server.route('/')
 def root():
     return redirect('/login')
 
-# Loginroute
+# Loginroute met validatie
 @server.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -72,7 +71,7 @@ def login():
         flash("Invalid credentials. Please try again.")
     return render_template('login.html')
 
-# Registratieroute
+# Registratieroute voor nieuwe gebruikers
 @server.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -88,7 +87,7 @@ def register():
             return redirect('/login')
     return render_template('register.html')
 
-# Uitlogroute
+# Uitlogroute wist sessiegegevens
 @server.route('/logout')
 def logout():
     session.pop('user', None)
@@ -96,15 +95,13 @@ def logout():
     flash("You have been logged out.")
     return redirect('/login')
 
-# Admin-dashboard route
+# Admin-dashboard voor beheer van gebruikers
 @server.route('/admin', methods=['GET', 'POST'])
 def admin_dashboard():
-    # Check if the logged-in user is an admin
     current_user = User.query.filter_by(username=session.get('user')).first()
     if not current_user or not current_user.is_admin:
         return "Unauthorized access. Only admins can view this page.", 403
 
-    # Handle form submissions for user actions
     if request.method == 'POST':
         if 'delete_user' in request.form:
             user_id = request.form['delete_user']
@@ -129,27 +126,26 @@ def admin_dashboard():
                 flash(f"User {user.username} is no longer an admin.", "success")
         return redirect('/admin')
 
-    # Fetch all users for display
     users = User.query.all()
     return render_template('admin.html', users=users)
 
-# Dash Layout
+# Dash layout configureren
 app.layout = html.Div([
-    dcc.Location(id='url', refresh=False),
-    dcc.Store(id='selected-period', data='today'),
-    dcc.Store(id='is-admin', data=False),  # Store voor admin-status
-    # Knoppenbalk bovenaan
+    dcc.Location(id='url', refresh=False),  # Houd de URL bij
+    dcc.Store(id='selected-period', data='today'),  # Opslag voor geselecteerde periode
+    dcc.Store(id='is-admin', data=False),  # Adminstatus
     html.Div(className='button-container', children=[
+        # Navigatieknoppen
         html.Button('Today', id='btn-today', className='tab-button', n_clicks=0),
         html.Button('Yesterday', id='btn-yesterday', className='tab-button', n_clicks=0),
         html.Button('Last Week', id='btn-week', className='tab-button', n_clicks=0),
         html.A("Logout", href="/logout", className='tab-button logout-button'),
         html.A("Admin Dashboard", href="/admin", className='tab-button admin-dashboard'),
     ]),
-    html.Div(id='page-content')
+    html.Div(id='page-content')  # Dynamische inhoud
 ])
 
-# Callback voor admin-knop
+# Admin-knop updaten afhankelijk van admin-status
 @app.callback(
     Output('admin-dashboard-button', 'children'),
     [Input('is-admin', 'data')]
@@ -159,7 +155,7 @@ def update_admin_button(is_admin):
         return html.A("Admin Dashboard", href="/admin", className='tab-button admin-button')
     return no_update
 
-# Preload admin-status bij het laden van de pagina
+# Controleer admin-status bij het laden van een pagina
 @app.callback(
     Output('is-admin', 'data'),
     [Input('url', 'pathname')],
@@ -172,13 +168,12 @@ def check_admin_status(pathname):
         return current_user.is_admin if current_user else False
     return False
 
-# Callback voor navigatie naar de juiste pagina
+# Toewijzing van inhoud op basis van URL
 @app.callback(
     Output('page-content', 'children'),
     [Input('url', 'pathname'), Input('selected-period', 'data')]
 )
 def display_page(pathname, period):
-    # Controleer of de gebruiker is ingelogd
     if 'user' not in session:
         return html.Div([html.H1("Unauthorized"), html.P("Please login to access this page.")])
 
@@ -191,7 +186,7 @@ def display_page(pathname, period):
     else:
         return html.Div('404 - Page Not Found')
 
-# Callback voor het instellen van de periode met knoppen
+# Instellen van periode via knoppen
 @app.callback(
     [Output('selected-period', 'data'),
      Output('btn-today', 'className'),
@@ -219,6 +214,6 @@ def update_button_styles(n_clicks_today, n_clicks_yesterday, n_clicks_week):
         'tab-button active' if button_id == 'btn-week' else 'tab-button'
     )
 
-
+# Start de Flask-server
 if __name__ == '__main__':
     server.run(debug=True)

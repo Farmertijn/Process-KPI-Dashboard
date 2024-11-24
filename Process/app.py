@@ -1,7 +1,8 @@
-from dash import Dash
-import dash_bootstrap_components as dbc
+from dash import Dash  # Importeer de Dash-klasse voor het bouwen van de applicatie.
 
-external_stylesheets = ['https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css', '/assets/styles.css']
+external_stylesheets = ['/assets/styles.css']  # Verwijs naar een extern CSS-bestand voor styling.
 
 app = Dash(__name__, external_stylesheets=external_stylesheets, suppress_callback_exceptions=True)
-server = app.server
+# Maak een Dash-applicatie met externe stylesheets en ondersteuning voor dynamische callbacks.
+
+server = app.server  # Maak de onderliggende Flask-server beschikbaar.
