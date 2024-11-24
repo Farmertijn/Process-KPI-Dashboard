@@ -10,7 +10,9 @@ required_libraries = [
     "pytz",
     "seaborn",
     "matplotlib",
-    "sqlalchemy"
+    "sqlalchemy",
+    "flask_sqlalchemy",
+    "flask_bcrypt"
 ]
 
 # Controleer en installeer ontbrekende libraries
@@ -21,47 +23,175 @@ for library in required_libraries:
         print(f"{library} wordt geïnstalleerd...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", library])
 
-from datetime import timedelta, datetime
-import pandas as pd
-from dash import dcc, html, Input, Output, State, callback_context
-from app import app, server
+from flask import Flask, session, redirect, request, render_template, flash
+from dash import Dash, dcc, html, Input, Output, callback_context, no_update
+from models import db, bcrypt, User
 import home
 import InOut
 import harvester
-from data import df_filling_infeed, df_bench_weight, df_transplanting_infeed, using_csv_backup, reference_date
 
-# Layout met centrale knoppen en exportknop
+# Flask server configureren
+server = Flask(__name__)
+server.secret_key = 'your_secret_key'
+server.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+server.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(server)
+bcrypt.init_app(server)
+
+# Maak database als die nog niet bestaat
+with server.app_context():
+    db.create_all()
+    # Voeg een standaard admin-gebruiker toe als deze nog niet bestaat
+    if not User.query.filter_by(username='admin').first():
+        hashed_password = bcrypt.generate_password_hash('admin123').decode('utf-8')
+        admin_user = User(username='admin', password=hashed_password, is_admin=True)
+        db.session.add(admin_user)
+        db.session.commit()
+        print("Admin user created: admin/admin123")
+
+# Dash-app configureren
+app = Dash(server=server, url_base_pathname='/dashboard/', suppress_callback_exceptions=True)
+app.title = 'Process KPI Dashboard'
+
+# Rootroute voor redirect naar login
+@server.route('/')
+def root():
+    return redirect('/login')
+
+# Loginroute
+@server.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = User.query.filter_by(username=username).first()
+        if user and bcrypt.check_password_hash(user.password, password):
+            session['user'] = user.username
+            session['is_admin'] = user.is_admin
+            return redirect('/dashboard/')
+        flash("Invalid credentials. Please try again.")
+    return render_template('login.html')
+
+# Registratieroute
+@server.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists. Please choose a different username.")
+        else:
+            hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+            new_user = User(username=username, password=hashed_password)
+            db.session.add(new_user)
+            db.session.commit()
+            return redirect('/login')
+    return render_template('register.html')
+
+# Uitlogroute
+@server.route('/logout')
+def logout():
+    session.pop('user', None)
+    session.pop('is_admin', None)
+    flash("You have been logged out.")
+    return redirect('/login')
+
+# Admin-dashboard route
+@server.route('/admin', methods=['GET', 'POST'])
+def admin_dashboard():
+    # Check if the logged-in user is an admin
+    current_user = User.query.filter_by(username=session.get('user')).first()
+    if not current_user or not current_user.is_admin:
+        return "Unauthorized access. Only admins can view this page.", 403
+
+    # Handle form submissions for user actions
+    if request.method == 'POST':
+        if 'delete_user' in request.form:
+            user_id = request.form['delete_user']
+            user = User.query.get(user_id)
+            if user:
+                db.session.delete(user)
+                db.session.commit()
+                flash(f"User {user.username} deleted.", "success")
+        elif 'make_admin' in request.form:
+            user_id = request.form['make_admin']
+            user = User.query.get(user_id)
+            if user and not user.is_admin:
+                user.is_admin = True
+                db.session.commit()
+                flash(f"User {user.username} is now an admin.", "success")
+        elif 'remove_admin' in request.form:
+            user_id = request.form['remove_admin']
+            user = User.query.get(user_id)
+            if user and user.is_admin:
+                user.is_admin = False
+                db.session.commit()
+                flash(f"User {user.username} is no longer an admin.", "success")
+        return redirect('/admin')
+
+    # Fetch all users for display
+    users = User.query.all()
+    return render_template('admin.html', users=users)
+
+# Dash Layout
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     dcc.Store(id='selected-period', data='today'),
+    dcc.Store(id='is-admin', data=False),  # Store voor admin-status
+    # Knoppenbalk bovenaan
     html.Div(className='button-container', children=[
         html.Button('Today', id='btn-today', className='tab-button', n_clicks=0),
         html.Button('Yesterday', id='btn-yesterday', className='tab-button', n_clicks=0),
         html.Button('Last Week', id='btn-week', className='tab-button', n_clicks=0),
-        html.Button("Export Data to CSV", id="export-btn", className='tab-button', n_clicks=0),
-        dcc.Download(id="data-download")
+        html.A("Logout", href="/logout", className='tab-button logout-button'),
+        html.A("Admin Dashboard", href="/admin", className='tab-button admin-dashboard'),
     ]),
     html.Div(id='page-content')
 ])
-app.title = 'Process KPI Dashboard'
 
-# Callback voor navigatie naar de juiste pagina (InOut, Harvester of Home)
+# Callback voor admin-knop
+@app.callback(
+    Output('admin-dashboard-button', 'children'),
+    [Input('is-admin', 'data')]
+)
+def update_admin_button(is_admin):
+    if is_admin:
+        return html.A("Admin Dashboard", href="/admin", className='tab-button admin-button')
+    return no_update
+
+# Preload admin-status bij het laden van de pagina
+@app.callback(
+    Output('is-admin', 'data'),
+    [Input('url', 'pathname')],
+    prevent_initial_call=True
+)
+def check_admin_status(pathname):
+    user = session.get('user')
+    if user:
+        current_user = User.query.filter_by(username=user).first()
+        return current_user.is_admin if current_user else False
+    return False
+
+# Callback voor navigatie naar de juiste pagina
 @app.callback(
     Output('page-content', 'children'),
-    [Input('url', 'pathname'),
-     Input('selected-period', 'data')]
+    [Input('url', 'pathname'), Input('selected-period', 'data')]
 )
 def display_page(pathname, period):
-    if pathname == '/' or pathname == '/home':
+    # Controleer of de gebruiker is ingelogd
+    if 'user' not in session:
+        return html.Div([html.H1("Unauthorized"), html.P("Please login to access this page.")])
+
+    if pathname == '/dashboard/' or pathname == '/dashboard/home':
         return home.generate_kpi_cards(period)
-    elif pathname == '/InOut':
+    elif pathname == '/dashboard/InOut':
         return InOut.generate_inout_kpi_cards(period)
-    elif pathname == '/harvester':
+    elif pathname == '/dashboard/harvester':
         return harvester.generate_harvester_kpi_cards(period)
     else:
-        return '404'
+        return html.Div('404 - Page Not Found')
 
-# Callback voor de knoppen om de periode in te stellen
+# Callback voor het instellen van de periode met knoppen
 @app.callback(
     [Output('selected-period', 'data'),
      Output('btn-today', 'className'),
@@ -90,76 +220,5 @@ def update_button_styles(n_clicks_today, n_clicks_yesterday, n_clicks_week):
     )
 
 
-def filter_data_by_period(df, period):
-    if 'timestamp' not in df.columns:
-        raise ValueError("De dataframe bevat geen 'timestamp' kolom. Controleer de kolomnamen.")
-
-    # Zet de timestamp kolom om naar datetime, indien nodig
-    if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-
-    # Bepaal de huidige tijd, afhankelijk van de bron (database of CSV)
-    current_time = reference_date if using_csv_backup else datetime.now()
-
-    # Controleer of de timestamp kolom een tijdzone bevat en pas aan als dat zo is
-    if df['timestamp'].dt.tz is not None:
-        tz_info = df['timestamp'].dt.tz
-        current_time = current_time.replace(tzinfo=tz_info)
-    else:
-        tz_info = None
-
-    # Instellen van start- en eindtijden op basis van de periode
-    if period == 'today':
-        start_time = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_time = start_time + timedelta(days=1)
-
-    elif period == 'yesterday':
-        start_time = (current_time - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        end_time = start_time + timedelta(days=1)
-
-    elif period == 'week':
-        start_time = (current_time - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
-        end_time = current_time
-
-    # Breng start_time en end_time in dezelfde tijdzone als timestamp indien nodig
-    if tz_info:
-        start_time = start_time.astimezone(tz_info)
-        end_time = end_time.astimezone(tz_info)
-
-    # Pas filtering toe op basis van periode
-    return df[(df['timestamp'] >= start_time) & (df['timestamp'] < end_time)]
-
-@app.callback(
-    [Output("data-download", "data"), Output("export-btn", "n_clicks")],
-    [Input("export-btn", "n_clicks")],
-    [State("url", "pathname"), State("selected-period", "data")],
-    prevent_initial_call=True
-)
-def export_data(n_clicks, pathname, period):
-    if n_clicks is None or n_clicks == 0:
-        return None, 0  # Reset n_clicks en voer geen download uit
-
-    data = None
-    filename = "data.csv"
-
-    if pathname == '/InOut':
-        # Filter de filling infeed en transplanting infeed data voor de geselecteerde periode
-        filtered_filling_infeed = filter_data_by_period(df_filling_infeed.copy(), period)
-        filtered_transplanting_infeed = filter_data_by_period(df_transplanting_infeed.copy(), period)
-
-        # Combineer beide DataFrames op basis van timestamp
-        combined_df = pd.concat([filtered_filling_infeed, filtered_transplanting_infeed]).sort_values(by='timestamp')
-        filename = f"inout_raw_data_{period}.csv"
-        data = dcc.send_data_frame(combined_df.to_csv, filename)
-
-    elif pathname == '/harvester':
-        # Filter de bench weight data voor de geselecteerde periode
-        filtered_df = filter_data_by_period(df_bench_weight.copy(), period)
-        filename = f"harvester_raw_data_{period}.csv"
-        data = dcc.send_data_frame(filtered_df.to_csv, filename)
-
-    return data, 0  # Reset n_clicks direct na export
-
-
 if __name__ == '__main__':
-    app.run_server(host='127.0.0.1', port=8050, debug=False)
+    server.run(debug=True)
