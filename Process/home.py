@@ -17,7 +17,7 @@ def generate_kpi_cards(period):
     previous_metrics = calculate.metrics.get(previous_period, {})
     
     return html.Div(className="centered-containers", children=[
-        html.A(href='/InOut', className="container", children=[
+        html.A(href='/dashboard/InOut', className="container", children=[
             html.Div(className="kpi-card1", children=[
                 html.H3("Infeed", className="kpi-title"),
                 html.Hr(),
@@ -37,7 +37,7 @@ def generate_kpi_cards(period):
                 ], style={"display": "inline-flex", "align-items": "center"})
             ])
         ]),
-        html.A(href='/harvester', className="container", children=[
+        html.A(href='/dashboard/harvester', className="container", children=[
             html.Div(className="kpi-card2", children=[
                 html.H3("Harvester", className="kpi-title"),
                 html.Hr(),

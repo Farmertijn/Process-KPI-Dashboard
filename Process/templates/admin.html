@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+<div class="container">
+    <h1>Admin Dashboard</h1>
+    <p>Welcome, {{ session['user'] }}!</p>
+
+    <h2>Manage Users</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Admin</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
+                <td>
+                    <form method="POST" style="display:inline;">
+                        <button type="submit" name="delete_user" value="{{ user.id }}">Delete</button>
+                    </form>
+                    {% if not user.is_admin %}
+                    <form method="POST" style="display:inline;">
+                        <button type="submit" name="make_admin" value="{{ user.id }}">Make Admin</button>
+                    </form>
+                    {% else %}
+                    <form method="POST" style="display:inline;">
+                        <button type="submit" name="remove_admin" value="{{ user.id }}">Remove Admin</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="/dashboard">Back to Dashboard</a>
+</div>
+</body>
+</html>

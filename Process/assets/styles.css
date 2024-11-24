@@ -226,3 +226,18 @@ body {
     width: 500px;
   }
 }
+
+#logout-btn {
+    background-color: red;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+#logout-btn:hover {
+    background-color: darkred;
+}
+
