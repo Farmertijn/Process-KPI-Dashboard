@@ -2,7 +2,6 @@ from dash import html, Input, Output
 import calculate
 import charts
 from app import app
-import pandas as pd
 
 def generate_harvester_kpi_cards(period):
     total_harvest = round(calculate.metrics[period]['total_harvest'], 1)
