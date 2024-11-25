@@ -47,6 +47,12 @@ with server.app_context():
         db.session.add(admin_user)
         db.session.commit()
         print("Admin user created: admin/admin123")
+    if not User.query.filter_by(username='test').first():
+        hashed_password = bcrypt.generate_password_hash('test123').decode('utf-8')
+        admin_user = User(username='test', password=hashed_password, is_admin=False)
+        db.session.add(admin_user)
+        db.session.commit()
+        print("Test user created: test/test123")
 
 # Configuratie van de Dash-applicatie
 app = Dash(server=server, url_base_pathname='/dashboard/', suppress_callback_exceptions=True)
